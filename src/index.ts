@@ -2,9 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import ws from 'ws';
 import expressWs from 'express-ws';
-import {job} from './keep_alive.js';
-import {OpenAIOperations} from './openai_operations.js';
-import {TwitchBot} from './twitch_bot.js';
+import {job} from './keep_alive';
+import {OpenAIOperations} from './openai_operations';
+import {TwitchBot} from './twitch_bot';
 
 // Start keep alive cron job
 job.start();
@@ -19,7 +19,7 @@ app.set('view engine', 'ejs');
 
 // Load environment variables
 const GPT_MODE = process.env.GPT_MODE || 'CHAT';
-const HISTORY_LENGTH = process.env.HISTORY_LENGTH || 5;
+const HISTORY_LENGTH = parseInt(process.env.HISTORY_LENGTH ?? "5", 10);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const MODEL_NAME = process.env.MODEL_NAME || 'gpt-3.5-turbo';
 const TWITCH_USER = process.env.TWITCH_USER || 'oSetinhasBot';
@@ -29,7 +29,7 @@ const CHANNELS = process.env.CHANNELS || 'oSetinhas,jones88';
 const SEND_USERNAME = process.env.SEND_USERNAME || 'true';
 const ENABLE_TTS = process.env.ENABLE_TTS || 'false';
 const ENABLE_CHANNEL_POINTS = process.env.ENABLE_CHANNEL_POINTS || 'false';
-const COOLDOWN_DURATION = parseInt(process.env.COOLDOWN_DURATION, 10) || 10; // Cooldown duration in seconds
+const COOLDOWN_DURATION = parseInt(process.env.COOLDOWN_DURATION ?? "10", 10); // Cooldown duration in seconds
 
 if (!OPENAI_API_KEY) {
     console.error('No OPENAI_API_KEY found. Please set it as an environment variable.');
@@ -64,14 +64,7 @@ bot.onDisconnected(reason => {
 });
 
 // Connect bot
-bot.connect(
-    () => {
-        console.log('Bot connected!');
-    },
-    error => {
-        console.error('Bot couldn\'t connect!', error);
-    }
-);
+bot.connect(); // connect() does not take arguments
 
 bot.onMessage(async (channel, user, message, self) => {
     if (self) return;
@@ -82,7 +75,7 @@ bot.onMessage(async (channel, user, message, self) => {
     if (ENABLE_CHANNEL_POINTS === 'true' && user['msg-id'] === 'highlighted-message') {
         console.log(`Highlighted message: ${message}`);
         if (elapsedTime < COOLDOWN_DURATION) {
-            bot.say(channel, `Cooldown active. Please wait ${COOLDOWN_DURATION - elapsedTime.toFixed(1)} seconds before sending another message.`);
+            bot.say(channel, `Cooldown active. Please wait ${COOLDOWN_DURATION - parseFloat(elapsedTime.toFixed(1))} seconds before sending another message.`);
             return;
         }
         lastResponseTime = currentTime; // Update the last response time
@@ -94,7 +87,7 @@ bot.onMessage(async (channel, user, message, self) => {
     const command = commandNames.find(cmd => message.toLowerCase().startsWith(cmd));
     if (command) {
         if (elapsedTime < COOLDOWN_DURATION) {
-            bot.say(channel, `Cooldown active. Please wait ${COOLDOWN_DURATION - elapsedTime.toFixed(1)} seconds before sending another message.`);
+            bot.say(channel, `Cooldown active. Please wait ${COOLDOWN_DURATION - parseFloat(elapsedTime.toFixed(1))} seconds before sending another message.`);
             return;
         }
         lastResponseTime = currentTime; // Update the last response time
@@ -107,7 +100,7 @@ bot.onMessage(async (channel, user, message, self) => {
         const response = await openaiOps.make_openai_call(text);
         if (response.length > maxLength) {
             const messages = response.match(new RegExp(`.{1,${maxLength}}`, 'g'));
-            messages.forEach((msg, index) => {
+            (messages ?? []).forEach((msg, index) => {
                 setTimeout(() => {
                     bot.say(channel, msg);
                 }, 1000 * index);
@@ -119,7 +112,7 @@ bot.onMessage(async (channel, user, message, self) => {
         if (ENABLE_TTS === 'true') {
             try {
                 const ttsAudioUrl = await bot.sayTTS(channel, response, user['userstate']);
-                notifyFileChange(ttsAudioUrl);
+                notifyFileChange();
             } catch (error) {
                 console.error('TTS Error:', error);
             }
@@ -127,8 +120,8 @@ bot.onMessage(async (channel, user, message, self) => {
     }
 });
 
-app.ws('/check-for-updates', (ws, req) => {
-    ws.on('message', message => {
+(app as any).ws('/check-for-updates', (ws: any, req: any) => {
+    ws.on('message', (message: any) => {
         // Handle WebSocket messages (if needed)
     });
 });
@@ -139,7 +132,7 @@ console.log('History length:', HISTORY_LENGTH);
 console.log('OpenAI API Key:', OPENAI_API_KEY);
 console.log('Model Name:', MODEL_NAME);
 
-app.use(express.json({extended: true, limit: '1mb'}));
+app.use(express.json({limit: '1mb'}));
 app.use('/public', express.static('public'));
 
 app.all('/', (req, res) => {
@@ -188,7 +181,7 @@ const server = app.listen(3000, () => {
 
 const wss = expressWsInstance.getWss();
 wss.on('connection', ws => {
-    ws.on('message', message => {
+    ws.on('message', (message: any) => {
         // Handle client messages (if needed)
     });
 });
